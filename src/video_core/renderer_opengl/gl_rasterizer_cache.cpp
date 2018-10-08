@@ -45,9 +45,7 @@ static VAddr TryGetCpuAddr(Tegra::GPUVAddr gpu_addr) {
     SurfaceParams params{};
     params.addr = TryGetCpuAddr(config.tic.Address());
     params.is_tiled = config.tic.IsTiled();
-    params.block_width = params.is_tiled ? config.tic.BlockWidth() : 0,
     params.block_height = params.is_tiled ? config.tic.BlockHeight() : 0,
-    params.block_depth = params.is_tiled ? config.tic.BlockDepth() : 0,
     params.pixel_format =
         PixelFormatFromTextureFormat(config.tic.format, config.tic.r_type.Value());
     params.component_type = ComponentTypeFromTexture(config.tic.r_type.Value());
@@ -100,9 +98,7 @@ static VAddr TryGetCpuAddr(Tegra::GPUVAddr gpu_addr) {
     SurfaceParams params{};
     params.addr = TryGetCpuAddr(config.Address());
     params.is_tiled = true;
-    params.block_width = 1 << config.block_dimensions.block_width;
-    params.block_height = 1 << config.block_dimensions.block_height;
-    params.block_depth = 1 << config.block_dimensions.block_depth;
+    params.block_height = Tegra::Texture::TICEntry::DefaultBlockHeight;
     params.pixel_format = PixelFormatFromRenderTargetFormat(config.format);
     params.component_type = ComponentTypeFromRenderTarget(config.format);
     params.type = GetFormatType(params.pixel_format);
@@ -127,22 +123,10 @@ static VAddr TryGetCpuAddr(Tegra::GPUVAddr gpu_addr) {
 /*static*/ SurfaceParams SurfaceParams::CreateForDepthBuffer(u32 zeta_width, u32 zeta_height,
                                                              Tegra::GPUVAddr zeta_address,
                                                              Tegra::DepthFormat format) {
-    auto MatchBlockHeight = [](u32 height) {
-        u32 bh = 0;
-        u32 h = height / 8;
-        while (h) {
-            h = h << 1;
-            bh++;
-        }
-        bh = std::min(bh, 4u);
-        return 1 << bh;
-    };
     SurfaceParams params{};
     params.addr = TryGetCpuAddr(zeta_address);
     params.is_tiled = true;
-    params.block_width = 1;
-    params.block_height = MatchBlockHeight(zeta_height);
-    params.block_depth = 1;
+    params.block_height = Tegra::Texture::TICEntry::DefaultBlockHeight;
     params.pixel_format = PixelFormatFromDepthFormat(format);
     params.component_type = ComponentTypeFromDepthFormat(format);
     params.type = GetFormatType(params.pixel_format);
@@ -833,11 +817,6 @@ void CachedSurface::LoadGLBuffer() {
 
     if (params.is_tiled) {
         gl_buffer.resize(total_size);
-
-        ASSERT_MSG(params.block_width == 1,
-                   "Block width is defined as {}", params.block_width);
-        ASSERT_MSG(params.block_depth == 1,
-                   "Block depth is defined as {}", params.block_depth);
 
         // TODO(bunnei): This only unswizzles and copies a 2D texture - we do not yet know how to do
         // this for 3D textures, etc.
