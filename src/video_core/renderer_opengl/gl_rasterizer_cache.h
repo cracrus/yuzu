@@ -733,7 +733,9 @@ struct SurfaceParams {
 
     VAddr addr;
     bool is_tiled;
+    u32 block_width;
     u32 block_height;
+    u32 block_depth;
     PixelFormat pixel_format;
     ComponentType component_type;
     SurfaceType type;

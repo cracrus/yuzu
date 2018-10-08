@@ -439,7 +439,11 @@ public:
             u32 width;
             u32 height;
             Tegra::RenderTargetFormat format;
-            u32 block_dimensions;
+            union {
+                BitField<0, 3, u32> block_width;
+                BitField<3, 3, u32> block_height;
+                BitField<6, 3, u32> block_depth;
+            } block_dimensions;
             u32 array_mode;
             u32 layer_stride;
             u32 base_layer;
