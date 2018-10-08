@@ -45,7 +45,9 @@ static VAddr TryGetCpuAddr(Tegra::GPUVAddr gpu_addr) {
     SurfaceParams params{};
     params.addr = TryGetCpuAddr(config.tic.Address());
     params.is_tiled = config.tic.IsTiled();
+    params.block_width = params.is_tiled ? config.tic.BlockWidth() : 0,
     params.block_height = params.is_tiled ? config.tic.BlockHeight() : 0,
+    params.block_depth = params.is_tiled ? config.tic.BlockDepth() : 0,
     params.pixel_format =
         PixelFormatFromTextureFormat(config.tic.format, config.tic.r_type.Value());
     params.component_type = ComponentTypeFromTexture(config.tic.r_type.Value());
@@ -98,7 +100,9 @@ static VAddr TryGetCpuAddr(Tegra::GPUVAddr gpu_addr) {
     SurfaceParams params{};
     params.addr = TryGetCpuAddr(config.Address());
     params.is_tiled = true;
+    params.block_width = Tegra::Texture::TICEntry::DefaultBlockWidth;
     params.block_height = Tegra::Texture::TICEntry::DefaultBlockHeight;
+    params.block_depth = Tegra::Texture::TICEntry::DefaultBlockDepth;
     params.pixel_format = PixelFormatFromRenderTargetFormat(config.format);
     params.component_type = ComponentTypeFromRenderTarget(config.format);
     params.type = GetFormatType(params.pixel_format);
@@ -126,7 +130,9 @@ static VAddr TryGetCpuAddr(Tegra::GPUVAddr gpu_addr) {
     SurfaceParams params{};
     params.addr = TryGetCpuAddr(zeta_address);
     params.is_tiled = true;
+    params.block_width = Tegra::Texture::TICEntry::DefaultBlockWidth;
     params.block_height = Tegra::Texture::TICEntry::DefaultBlockHeight;
+    params.block_depth = Tegra::Texture::TICEntry::DefaultBlockDepth;
     params.pixel_format = PixelFormatFromDepthFormat(format);
     params.component_type = ComponentTypeFromDepthFormat(format);
     params.type = GetFormatType(params.pixel_format);
@@ -313,8 +319,8 @@ static bool IsFormatBCn(PixelFormat format) {
 }
 
 template <bool morton_to_gl, PixelFormat format>
-void MortonCopy(u32 stride, u32 block_height, u32 height, u8* gl_buffer, std::size_t gl_buffer_size,
-                VAddr addr) {
+void MortonCopy(u32 width, u32 height, u32 depth, u8* gl_buffer, std::size_t gl_buffer_size,
+                VAddr addr, u32 block_width, u32 block_height, u32 block_depth) {
     constexpr u32 bytes_per_pixel = SurfaceParams::GetFormatBpp(format) / CHAR_BIT;
     constexpr u32 gl_bytes_per_pixel = CachedSurface::GetGLBytesPerPixel(format);
 
@@ -322,20 +328,20 @@ void MortonCopy(u32 stride, u32 block_height, u32 height, u8* gl_buffer, std::si
         // With the BCn formats (DXT and DXN), each 4x4 tile is swizzled instead of just individual
         // pixel values.
         const u32 tile_size{IsFormatBCn(format) ? 4U : 1U};
-        const std::vector<u8> data = Tegra::Texture::UnswizzleTexture(
-            addr, tile_size, bytes_per_pixel, stride, height, block_height);
+        const std::vector<u8> data = Tegra::Texture::UnswizzleTexture(addr, tile_size, bytes_per_pixel, width, height, depth,
+                                             block_width, block_height, block_depth);
         const std::size_t size_to_copy{std::min(gl_buffer_size, data.size())};
         memcpy(gl_buffer, data.data(), size_to_copy);
     } else {
         // TODO(bunnei): Assumes the default rendering GOB size of 16 (128 lines). We should
         // check the configuration for this and perform more generic un/swizzle
         LOG_WARNING(Render_OpenGL, "need to use correct swizzle/GOB parameters!");
-        VideoCore::MortonCopyPixels128(stride, height, bytes_per_pixel, gl_bytes_per_pixel,
+        VideoCore::MortonCopyPixels128(width, height, bytes_per_pixel, gl_bytes_per_pixel,
                                        Memory::GetPointer(addr), gl_buffer, morton_to_gl);
     }
 }
 
-static constexpr std::array<void (*)(u32, u32, u32, u8*, std::size_t, VAddr),
+static constexpr std::array<void (*)(u32, u32, u32, u8*, std::size_t, VAddr, u32, u32, u32),
                             SurfaceParams::MaxPixelFormat>
     morton_to_gl_fns = {
         // clang-format off
@@ -393,7 +399,7 @@ static constexpr std::array<void (*)(u32, u32, u32, u8*, std::size_t, VAddr),
         // clang-format on
 };
 
-static constexpr std::array<void (*)(u32, u32, u32, u8*, std::size_t, VAddr),
+static constexpr std::array<void (*)(u32, u32, u32, u8*, std::size_t, VAddr, u32, u32, u32),
                             SurfaceParams::MaxPixelFormat>
     gl_to_morton_fns = {
         // clang-format off
@@ -829,8 +835,9 @@ void CachedSurface::LoadGLBuffer() {
             for (std::size_t index = 0; index < params.depth; ++index) {
                 const std::size_t offset{index * copy_size};
                 morton_to_gl_fns[static_cast<std::size_t>(params.pixel_format)](
-                    params.width, params.block_height, params.height, gl_buffer.data() + offset,
-                    copy_size, params.addr + offset);
+                    params.width, params.height, 1, gl_buffer.data() + offset, copy_size,
+                    params.addr + offset, params.block_width, params.block_height,
+                    1);
             }
             break;
         default:
@@ -840,8 +847,8 @@ void CachedSurface::LoadGLBuffer() {
         }
 
         morton_to_gl_fns[static_cast<std::size_t>(params.pixel_format)](
-            params.width, params.block_height, params.height, gl_buffer.data(), copy_size,
-            params.addr);
+            params.width, params.height, 1, gl_buffer.data(), copy_size, params.addr,
+            params.block_width, params.block_height, 1);
     } else {
         const u8* const texture_src_data_end{texture_src_data + total_size};
         gl_buffer.assign(texture_src_data, texture_src_data_end);

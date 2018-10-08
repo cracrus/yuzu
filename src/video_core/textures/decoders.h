@@ -14,7 +14,10 @@ namespace Tegra::Texture {
  * Unswizzles a swizzled texture without changing its format.
  */
 std::vector<u8> UnswizzleTexture(VAddr address, u32 tile_size, u32 bytes_per_pixel, u32 width,
-                                 u32 height, u32 block_height = TICEntry::DefaultBlockHeight);
+                                 u32 height, u32 depth,
+                                 u32 block_width = TICEntry::DefaultBlockWidth,
+                                 u32 block_height = TICEntry::DefaultBlockHeight,
+                                 u32 block_depth = TICEntry::DefaultBlockDepth);
 
 /**
  * Unswizzles a swizzled depth texture without changing its format.
