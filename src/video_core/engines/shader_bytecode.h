@@ -205,8 +205,6 @@ enum class UniformType : u64 {
     SignedShort = 3,
     Single = 4,
     Double = 5,
-    Quad = 6,
-    UnsignedQuad = 7,
 };
 
 enum class IMinMaxExchange : u64 {
@@ -552,12 +550,6 @@ union Instruction {
         BitField<48, 3, UniformType> type;
         BitField<44, 2, u64> unknown;
     } ld_c;
-
-    union {
-        BitField<48, 3, UniformType> size;
-        BitField<46, 2, u64> cache_mode;
-        BitField<20, 24, s64> offset_immediate;
-    } ld_g;
 
     union {
         BitField<0, 3, u64> pred0;
