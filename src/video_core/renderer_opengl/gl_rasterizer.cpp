@@ -562,6 +562,7 @@ void RasterizerOpenGL::DrawArrays() {
     SyncLogicOpState();
     SyncCullMode();
     SyncAlphaTest();
+    SyncScissorTest();
     SyncTransformFeedback();
     SyncPointState();
 
@@ -991,6 +992,22 @@ void RasterizerOpenGL::SyncAlphaTest() {
     if (regs.alpha_test_enabled != 0) {
         LOG_CRITICAL(Render_OpenGL, "Alpha testing is not implemented");
         UNREACHABLE();
+    }
+}
+
+void RasterizerOpenGL::SyncScissorTest() {
+    const auto& regs = Core::System::GetInstance().GPU().Maxwell3D().regs;
+
+    state.scissor.enabled = (regs.scissor_test.enable != 0);
+    if (regs.scissor_test.enable != 0) {
+        u32 width = regs.scissor_test.max_x - regs.scissor_test.min_x;
+        u32 height = regs.scissor_test.max_y - regs.scissor_test.min_y;
+        u32 x = regs.scissor_test.min_x;
+        u32 y = regs.scissor_test.min_y;
+        state.scissor.x = x;
+        state.scissor.y = y;
+        state.scissor.width = width;
+        state.scissor.height = height;
     }
 }
 
