@@ -976,11 +976,16 @@ void RasterizerOpenGL::SyncAlphaTest() {
 void RasterizerOpenGL::SyncScissorTest() {
     const auto& regs = Core::System::GetInstance().GPU().Maxwell3D().regs;
 
-    // TODO(Rodrigo): Alpha testing is a legacy OpenGL feature, but it can be
-    // implemented with a test+discard in fragment shaders.
+    state.scissor.enabled = (regs.scissor_test.enable != 0);
     if (regs.scissor_test.enable != 0) {
-        LOG_CRITICAL(Render_OpenGL, "Scissor testing is not implemented");
-        UNREACHABLE();
+        u32 width = regs.scissor_test.max_x - regs.scissor_test.min_x;
+        u32 height = regs.scissor_test.max_y - regs.scissor_test.min_y;
+        u32 x = regs.scissor_test.min_x;
+        u32 y = regs.scissor_test.min_y;
+        state.scissor.x = x;
+        state.scissor.y = y;
+        state.scissor.width = width;
+        state.scissor.height = height;
     }
 }
 
